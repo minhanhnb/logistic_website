@@ -1,0 +1,1406 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bill Comparison Analyzer - MBL vs HBL</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
+    <!-- Tesseract OCR Library - with proper CDN -->
+    <script async src="https://cdn.jsdelivr.net/npm/tesseract.js@v2/dist/tesseract.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 32px;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .header p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        /* Main Content */
+        .main-content {
+            padding: 30px;
+        }
+
+        /* Upload Section */
+        .upload-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .upload-box {
+            border: 2px dashed #667eea;
+            border-radius: 12px;
+            padding: 30px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: #f9fafb;
+        }
+
+        .upload-box:hover {
+            border-color: #764ba2;
+            background: #f3f4f6;
+            transform: translateY(-2px);
+        }
+
+        .upload-box.dragover {
+            border-color: #764ba2;
+            background: #ede9fe;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .upload-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+
+        .upload-box h3 {
+            font-size: 18px;
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        .upload-box p {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 15px;
+        }
+
+        .upload-box input {
+            display: none;
+        }
+
+        .file-status {
+            font-size: 12px;
+            margin-top: 10px;
+            padding: 8px;
+            border-radius: 6px;
+            background: #d1fae5;
+            color: #065f46;
+            display: none;
+        }
+
+        .file-status.show {
+            display: block;
+        }
+
+        /* Control Section */
+        .control-section {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #f9fafb;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            border: 1px solid #e5e7eb;
+        }
+
+        .status-info {
+            font-size: 13px;
+            color: #666;
+        }
+
+        .status-item {
+            display: inline-block;
+            margin-right: 20px;
+        }
+
+        .status-item strong {
+            color: #333;
+        }
+
+        .analyze-btn {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .analyze-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .analyze-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Loading State */
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 60px 30px;
+            background: #f3f4f6;
+            border-radius: 12px;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e5e7eb;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading p {
+            font-size: 16px;
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        .loading small {
+            color: #666;
+            font-size: 13px;
+        }
+
+        /* Results Section */
+        .results {
+            display: none;
+        }
+
+        .results.show {
+            display: block;
+        }
+
+        /* Summary Cards */
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .summary-card {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .summary-card.match {
+            background: #d1fae5;
+            border-color: #6ee7b7;
+        }
+
+        .summary-card.diff {
+            background: #fee2e2;
+            border-color: #fca5a5;
+        }
+
+        .summary-card.accuracy {
+            background: #fef3c7;
+            border-color: #fcd34d;
+        }
+
+        .summary-card label {
+            display: block;
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+
+        .summary-card .value {
+            font-size: 28px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .summary-card.match .value {
+            color: #059669;
+        }
+
+        .summary-card.diff .value {
+            color: #dc2626;
+        }
+
+        .summary-card.accuracy .value {
+            color: #d97706;
+        }
+
+        /* Comparison Table */
+        .table-section {
+            margin-bottom: 30px;
+            background: white;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
+            overflow: hidden;
+        }
+
+        .table-header {
+            background: #f9fafb;
+            padding: 20px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .table-header h3 {
+            font-size: 16px;
+            margin: 0;
+        }
+
+        .table-wrapper {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        thead {
+            background: #f3f4f6;
+        }
+
+        th {
+            padding: 12px 15px;
+            text-align: left;
+            font-weight: 600;
+            color: #333;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #f3f4f6;
+        }
+
+        tr:hover {
+            background: #f9fafb;
+        }
+
+        tr.match-row {
+            background: #f0fdf4;
+        }
+
+        tr.diff-row {
+            background: #fef2f2;
+        }
+
+        .field-name {
+            font-weight: 500;
+            color: #333;
+        }
+
+        .field-value {
+            background: #f3f4f6;
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            color: #333;
+            max-width: 300px;
+            word-break: break-all;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .badge-match {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .badge-diff {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .note-text {
+            font-size: 12px;
+            color: #666;
+        }
+
+        /* AI Analysis Section */
+        .analysis-section {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 30px;
+        }
+
+        .analysis-section h3 {
+            font-size: 16px;
+            margin-bottom: 15px;
+            color: #333;
+            display: flex;
+            align-items: center;
+        }
+
+        .analysis-section h3::before {
+            content: "✨";
+            margin-right: 8px;
+            font-size: 18px;
+        }
+
+        #ai-analysis {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            line-height: 1.6;
+            color: #333;
+            font-size: 13px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            border-left: 3px solid #667eea;
+        }
+
+        /* Error State */
+        .error {
+            display: none;
+            background: #fee2e2;
+            border: 1px solid #fca5a5;
+            border-radius: 12px;
+            padding: 20px;
+            color: #991b1b;
+            margin-bottom: 30px;
+        }
+
+        .error.show {
+            display: block;
+        }
+
+        .error h4 {
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .error p {
+            margin: 0;
+            font-size: 13px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .upload-section {
+                grid-template-columns: 1fr;
+            }
+
+            .control-section {
+                flex-direction: column;
+                gap: 15px;
+                text-align: center;
+            }
+
+            .header h1 {
+                font-size: 24px;
+            }
+
+            .summary-cards {
+                grid-template-columns: 1fr;
+            }
+
+            table {
+                font-size: 12px;
+            }
+
+            th, td {
+                padding: 10px;
+            }
+
+            .field-value {
+                max-width: 150px;
+            }
+        }
+
+        /* Footer */
+        .footer {
+            background: #f9fafb;
+            padding: 20px 30px;
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        /* API Key Input */
+        .api-key-section {
+            background: #fef3c7;
+            border: 1px solid #fcd34d;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .api-key-section h4 {
+            margin: 0 0 12px 0;
+            font-size: 14px;
+        }
+
+        .api-key-input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .api-key-input-group input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid #fcd34d;
+            border-radius: 6px;
+            font-size: 13px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .api-key-input-group button {
+            padding: 8px 16px;
+            background: #d97706;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .api-key-input-group button:hover {
+            background: #b45309;
+        }
+
+        .api-status {
+            font-size: 12px;
+            color: #92400e;
+        }
+
+        .api-status.success {
+            color: #065f46;
+        }
+
+        .api-status.error {
+            color: #991b1b;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>📊 Bill Comparison Analyzer</h1>
+            <p>Tự động so sánh Master Bill (MBL) và House Bill (HBL) bằng AI</p>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- API Key Setup -->
+            <div class="api-key-section">
+                <h4>⚙️ Cấu hình API Key (Anthropic/Gemini)</h4>
+                <div class="api-key-input-group">
+                    <input type="password" id="api-key-input" placeholder="Nhập API Key của bạn (sk-ant-...)" />
+                    <button onclick="saveApiKey()">Lưu</button>
+                </div>
+                <p class="api-status" id="api-status">❌ Chưa cấu hình API Key</p>
+                <small style="color: #92400e; display: block; margin-top: 8px;">
+                    💡 Tip: Bạn có thể lấy Gemini API Key từ <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color: #d97706; text-decoration: underline;">aistudio.google.com</a>
+                    <br/>
+                    🖼️ OCR được tự động bật: Nếu PDF chứa hình ảnh, ứng dụng sẽ tự động dùng Tesseract OCR để trích xuất text
+                    <br/>
+                    📌 Lần đầu dùng OCR sẽ tải model (~50MB) - mất vài giây, lần sau sẽ nhanh hơn
+                </small>
+            </div>
+
+            <!-- Error Display -->
+            <div class="error" id="error">
+                <h4>Lỗi</h4>
+                <p id="error-msg"></p>
+            </div>
+
+            <!-- Upload Section -->
+            <div class="upload-section">
+                <!-- MBL Upload -->
+                <div class="upload-box" id="mbl-drop">
+                    <div class="upload-icon">📋</div>
+                    <h3>Master Bill (MBL)</h3>
+                    <p>Công ty Logistics</p>
+                    <p style="font-size: 12px; color: #999;">Kéo thả PDF hoặc click để chọn</p>
+                    <input type="file" id="mbl-input" accept=".pdf" />
+                    <div class="file-status" id="mbl-status"></div>
+                </div>
+
+                <!-- HBL Upload -->
+                <div class="upload-box" id="hbl-drop">
+                    <div class="upload-icon">📦</div>
+                    <h3>House Bill (HBL)</h3>
+                    <p>Người Mua Hàng</p>
+                    <p style="font-size: 12px; color: #999;">Kéo thả PDF hoặc click để chọn</p>
+                    <input type="file" id="hbl-input" accept=".pdf" />
+                    <div class="file-status" id="hbl-status"></div>
+                </div>
+            </div>
+
+            <!-- Control Section -->
+            <div class="control-section">
+                <div class="status-info">
+                    <div class="status-item">
+                        <strong>MBL:</strong> <span id="status-mbl">Chưa tải</span>
+                    </div>
+                    <div class="status-item">
+                        <strong>HBL:</strong> <span id="status-hbl">Chưa tải</span>
+                    </div>
+                </div>
+                <button class="analyze-btn" id="analyze-btn" disabled>
+                    🔍 Phân tích & So sánh
+                </button>
+            </div>
+
+            <!-- Loading State -->
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p id="loading-title">Đang phân tích...</p>
+                <small id="loading-subtitle">Trích xuất text từ PDF và so sánh dữ liệu</small>
+                <div style="margin-top: 15px; font-size: 12px; color: #666; min-height: 30px;" id="loading-status"></div>
+            </div>
+
+            <!-- Results Section -->
+            <div class="results" id="results">
+                <!-- Summary Cards -->
+                <div class="summary-cards">
+                    <div class="summary-card match">
+                        <label>Trường khớp</label>
+                        <div class="value" id="match-count">0</div>
+                    </div>
+                    <div class="summary-card diff">
+                        <label>Trường khác</label>
+                        <div class="value" id="diff-count">0</div>
+                    </div>
+                    <div class="summary-card accuracy">
+                        <label>Độ chính xác</label>
+                        <div class="value" id="accuracy">0%</div>
+                    </div>
+                </div>
+
+                <!-- Comparison Table -->
+                <div class="table-section">
+                    <div class="table-header">
+                        <h3>📋 Bảng So Sánh Chi Tiết</h3>
+                    </div>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th style="width: 15%;">Trường dữ liệu</th>
+                                    <th style="width: 30%;">MBL Value</th>
+                                    <th style="width: 30%;">HBL Value</th>
+                                    <th style="width: 12%;">Trạng thái</th>
+                                    <th style="width: 13%;">Ghi chú</th>
+                                </tr>
+                            </thead>
+                            <tbody id="comparison-table">
+                                <!-- Filled by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Debug Console Logs -->
+                <div style="background: #1e293b; color: #e2e8f0; border-radius: 12px; padding: 15px; margin-bottom: 20px; font-family: 'Courier New', monospace; font-size: 12px; max-height: 300px; overflow-y: auto;" id="console-logs">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #334155;">
+                        <strong style="color: #60a5fa;">🖥️ Debug Logs (Console)</strong>
+                        <button onclick="document.getElementById('console-logs').style.display='none'" style="background: transparent; border: none; color: #e2e8f0; cursor: pointer; font-size: 16px;">✕</button>
+                    </div>
+                    <div id="console-content" style="line-height: 1.5; max-height: 250px; overflow-y: auto;">
+                        <div style="color: #94a3b8;">Logs sẽ hiển thị ở đây...</div>
+                    </div>
+                </div>
+
+                <!-- AI Analysis -->
+                <div class="analysis-section">
+                    <h3>Phân tích AI & Khuyến nghị</h3>
+                    <div id="ai-analysis">Đang chờ phân tích...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p>Bill Comparison Analyzer v1.0 | Powered by Anthropic API & PDF.js | © 2024</p>
+        </div>
+    </div>
+
+    <script>
+        // Initialize PDF.js worker with proper setup
+        if (typeof pdfjsLib !== 'undefined') {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+            console.log('✅ PDF.js initialized successfully');
+        } else {
+            console.warn('⚠️ PDF.js not loaded, trying alternative...');
+        }
+
+        // Wait for Tesseract to load
+        let tesseractReady = false;
+        async function waitForTesseract(timeout = 30000) {
+            const startTime = Date.now();
+            while (!window.Tesseract && (Date.now() - startTime < timeout)) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+            
+            if (window.Tesseract) {
+                console.log('✅ Tesseract.js loaded successfully');
+                tesseractReady = true;
+                return true;
+            } else {
+                console.warn('⚠️ Tesseract.js failed to load - OCR will be skipped');
+                return false;
+            }
+        }
+
+        // Initialize Tesseract on page load
+        window.addEventListener('load', async () => {
+            console.log('🚀 Page loaded, initializing libraries...');
+            await waitForTesseract();
+        });
+
+        // Console log capture
+        const logs = [];
+        const originalLog = console.log;
+        const originalError = console.error;
+        const originalWarn = console.warn;
+
+        function captureLog(type, args) {
+            const message = Array.from(args).map(arg => {
+                if (typeof arg === 'object') {
+                    try {
+                        return JSON.stringify(arg, null, 2);
+                    } catch(e) {
+                        return String(arg);
+                    }
+                }
+                return String(arg);
+            }).join(' ');
+            
+            logs.push({ type, message, time: new Date().toLocaleTimeString() });
+            updateConsoleDisplay();
+        }
+
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            captureLog('log', args);
+        };
+
+        console.error = function(...args) {
+            originalError.apply(console, args);
+            captureLog('error', args);
+        };
+
+        console.warn = function(...args) {
+            originalWarn.apply(console, args);
+            captureLog('warn', args);
+        };
+
+        function updateConsoleDisplay() {
+            const consoleContent = document.getElementById('console-content');
+            consoleContent.innerHTML = logs.map(log => {
+                const color = log.type === 'error' ? '#f87171' : log.type === 'warn' ? '#fbbf24' : '#60a5fa';
+                return `<div style="color: ${color}; margin-bottom: 8px;"><span style="color: #64748b;">[${log.time}]</span> ${escapeHtml(log.message)}</div>`;
+            }).join('');
+            consoleContent.parentElement.scrollTop = consoleContent.parentElement.scrollHeight;
+        }
+
+        // State management
+        let appState = {
+            apiKey: localStorage.getItem('billAnalyzer_apiKey') || '',
+            mblFile: null,
+            hblFile: null,
+            mblText: '',
+            hblText: ''
+        };
+
+        // Update API status on load
+        updateApiStatus();
+
+        /**
+         * API Key Management
+         */
+        function saveApiKey() {
+            const key = document.getElementById('api-key-input').value.trim();
+            if (!key) {
+                showError('Vui lòng nhập API Key');
+                return;
+            }
+            appState.apiKey = key;
+            localStorage.setItem('billAnalyzer_apiKey', key);
+            updateApiStatus();
+            document.getElementById('api-key-input').value = '';
+        }
+
+        function updateApiStatus() {
+            const status = document.getElementById('api-status');
+            if (appState.apiKey) {
+                status.textContent = '✅ API Key đã cấu hình';
+                status.className = 'api-status success';
+            } else {
+                status.textContent = '❌ Chưa cấu hình API Key';
+                status.className = 'api-status error';
+            }
+        }
+
+        /**
+         * File Upload Handlers
+         */
+        function setupDropZone(dropId, inputId, type) {
+            const dropZone = document.getElementById(dropId);
+            const input = document.getElementById(inputId);
+
+            dropZone.addEventListener('click', () => input.click());
+
+            ['dragenter', 'dragover'].forEach(event => {
+                dropZone.addEventListener(event, (e) => {
+                    e.preventDefault();
+                    dropZone.classList.add('dragover');
+                });
+            });
+
+            ['dragleave', 'drop'].forEach(event => {
+                dropZone.addEventListener(event, (e) => {
+                    e.preventDefault();
+                    dropZone.classList.remove('dragover');
+                });
+            });
+
+            dropZone.addEventListener('drop', (e) => {
+                const files = e.dataTransfer.files;
+                if (files.length > 0) handleFile(files[0], type);
+            });
+
+            input.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) handleFile(e.target.files[0], type);
+            });
+        }
+
+        async function handleFile(file, type) {
+            if (file.type !== 'application/pdf') {
+                showError('Vui lòng chọn file PDF');
+                return;
+            }
+
+            try {
+                showLoading(true);
+                updateLoadingStatus(`Đang trích xuất text từ ${type.toUpperCase()}...`);
+                
+                const text = await extractPdfText(file);
+                const statusEl = document.getElementById(`${type}-status`);
+
+                if (type === 'mbl') {
+                    appState.mblFile = file;
+                    appState.mblText = text;
+                    document.getElementById('status-mbl').textContent = '✓ ' + file.name;
+                    statusEl.textContent = '✓ File đã tải: ' + file.name;
+                } else {
+                    appState.hblFile = file;
+                    appState.hblText = text;
+                    document.getElementById('status-hbl').textContent = '✓ ' + file.name;
+                    statusEl.textContent = '✓ File đã tải: ' + file.name;
+                }
+
+                statusEl.classList.add('show');
+                document.getElementById('analyze-btn').disabled = !(appState.mblFile && appState.hblFile);
+                showLoading(false);
+            } catch (err) {
+                showError('Lỗi đọc PDF: ' + err.message);
+                showLoading(false);
+            }
+        }
+
+        /**
+         * PDF Text Extraction with OCR Fallback
+         * Combines native text extraction + Tesseract OCR for image-heavy PDFs
+         */
+        async function extractPdfText(file) {
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                console.log(`📖 Extracting text from ${file.name} (${(arrayBuffer.byteLength / 1024).toFixed(2)} KB)`);
+                
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                let allText = '';
+                const pageCount = pdf.numPages;
+
+                console.log(`📄 PDF has ${pageCount} page(s)`);
+
+                for (let i = 1; i <= pageCount; i++) {
+                    try {
+                        const page = await pdf.getPage(i);
+                        
+                        // First, try native text extraction
+                        const textContent = await page.getTextContent();
+                        let pageText = textContent.items.map(item => item.str).join(' ');
+                        
+                        console.log(`   Page ${i}/${pageCount} - Native text: ${pageText.substring(0, 50)}...`);
+
+                        // If native extraction yields very little text, use OCR
+                        if (pageText.trim().length < 50) {
+                            console.log(`   ⚠️ Page ${i} has little native text (${pageText.length} chars), running OCR...`);
+                            try {
+                                const ocrText = await extractPageWithOCR(page, i);
+                                pageText = ocrText;
+                                console.log(`   ✅ OCR complete for page ${i}: ${ocrText.substring(0, 50)}...`);
+                            } catch (ocrErr) {
+                                console.warn(`   ❌ OCR failed for page ${i}:`, ocrErr.message);
+                            }
+                        }
+
+                        allText += pageText + '\n---PAGE_BREAK---\n';
+                    } catch (pageErr) {
+                        console.warn(`⚠️ Error processing page ${i}:`, pageErr.message);
+                    }
+                }
+
+                console.log(`✅ Text extraction complete: ${allText.length} characters total`);
+                return allText;
+            } catch (err) {
+                console.error('❌ PDF Extraction Error:', err);
+                throw new Error('Failed to extract PDF text: ' + err.message);
+            }
+        }
+
+        /**
+         * Extract text from PDF page using Gemini Vision API
+         */
+        async function extractPageWithOCR(page, pageNum) {
+            try {
+                if (!appState.apiKey) {
+                    console.warn(`⚠️ API Key not configured for Vision OCR on page ${pageNum}`);
+                    return '';
+                }
+
+                console.log(`🔍 Starting Vision OCR for page ${pageNum}...`);
+                updateLoadingStatus(`🔍 OCR Page ${pageNum} - Converting to image...`);
+                
+                // Render page to canvas
+                const viewport = page.getViewport({ scale: 2 });
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+
+                const renderContext = {
+                    canvasContext: context,
+                    viewport: viewport
+                };
+
+                await page.render(renderContext).promise;
+                const imageBase64 = canvas.toDataURL('image/png').split(',')[1];
+                console.log(`   📸 Page ${pageNum} rendered to image (${canvas.width}x${canvas.height}px)`);
+
+                // Send to Gemini Vision API
+                console.log(`   🤖 Sending to Gemini Vision for text extraction...`);
+                updateLoadingStatus(`🔍 OCR Page ${pageNum} - Extracting text with Gemini Vision...`);
+
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${appState.apiKey}`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [
+                                {
+                                    text: "Extract ALL text from this document image. Return ONLY the extracted text, nothing else."
+                                },
+                                {
+                                    inlineData: {
+                                        mimeType: "image/png",
+                                        data: imageBase64
+                                    }
+                                }
+                            ]
+                        }]
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.error) {
+                    console.warn(`   ⚠️ Vision OCR failed:`, data.error);
+                    return '';
+                }
+
+                const text = data.candidates[0].content.parts[0].text;
+                console.log(`   ✅ Vision OCR complete: ${text.length} characters`);
+                return text;
+            } catch (err) {
+                console.error(`❌ OCR Error for page ${pageNum}:`, err.message);
+                return '';
+            }
+        }
+
+        /**
+         * Field Extraction using AI (Gemini/Claude)
+         */
+        async function extractFieldsWithAI(text, billType) {
+            if (!appState.apiKey) {
+                console.warn('API Key not configured, using fallback extraction');
+                updateLoadingStatus(`⚠️ ${billType}: API Key chưa cấu hình, dùng fallback extraction...`);
+                return extractFieldsFallback(text);
+            }
+
+            try {
+                const startTime = Date.now();
+                const prompt = `Hãy trích xuất các thông tin sau từ bill dưới đây. Trả lời CHỈ dưới dạng JSON (không có text khác).
+
+BILL TEXT:
+${text.substring(0, 3000)}
+
+Trích xuất và trả lại JSON với các field sau (nếu không tìm thấy, để giá trị là "N/A"):
+{
+  "Shipper": "...",
+  "Consignee": "...",
+  "Notify Party": "...",
+  "Pre-carriage by": "...",
+  "Place of Receipt": "...",
+  "Vessel": "...",
+  "Voy. No": "...",
+  "Port of Loading": "...",
+  "Port of Discharge": "...",
+  "Place of Delivery": "...",
+  "Container No": "...",
+  "Seal No": "...",
+  "Marks & Numbers": "...",
+  "Number of containers or other Pkgs": "...",
+  "Description of Packages and goods": "...",
+  "Gross weight": "...",
+  "Measurement": "...",
+  "Total number of container or packages": "..."
+}
+
+Lưu ý:
+- Lấy giá trị đầy đủ (không cắt ngắn)
+- Nếu có nhiều giá trị, lấy giá trị chính (thường là dòng đầu tiên)
+- Loại bỏ ký tự đặc biệt không cần thiết
+- Trả lời CHỈ có JSON, không có text nào khác`;
+
+                console.log(`\n🤖 [${billType}] Gọi Gemini API...`);
+                console.log(`   📝 Text length: ${text.length} characters`);
+                console.log(`   ⏱️ Thời gian bắt đầu: ${new Date(startTime).toLocaleTimeString()}`);
+                updateLoadingStatus(`🤖 ${billType}: Gửi yêu cầu đến API (${(text.length / 1000).toFixed(1)}KB text)...`);
+
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${appState.apiKey}`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [{
+                                text: prompt
+                            }]
+                        }]
+                    })
+                });
+
+                const responseTime = Date.now() - startTime;
+                console.log(`   📡 Nhận response từ API (${responseTime}ms)`);
+                updateLoadingStatus(`🤖 ${billType}: Nhận response từ API (${responseTime}ms)...`);
+
+                const data = await response.json();
+                
+                if (data.error) {
+                    console.error(`   ❌ API Error:`, data.error);
+                    updateLoadingStatus(`❌ ${billType}: API Error - ${data.error.message || data.error}`);
+                    return extractFieldsFallback(text);
+                }
+
+                let jsonText = data.candidates[0].content.parts[0].text;
+                console.log(`   📦 Raw API response: ${jsonText.substring(0, 100)}...`);
+                
+                // Remove markdown code blocks if present
+                jsonText = jsonText.replace(/```json\n?|\n?```/g, '').trim();
+                
+                console.log(`   🔍 Cleaned response: ${jsonText.substring(0, 100)}...`);
+                updateLoadingStatus(`🤖 ${billType}: Phân tích JSON từ API...`);
+                
+                const fields = JSON.parse(jsonText);
+                console.log(`   ✅ JSON parsed successfully - ${Object.keys(fields).length} fields`);
+                console.log(`   📊 ${billType} Fields extracted:`, {
+                    Shipper: fields['Shipper'],
+                    Consignee: fields['Consignee'],
+                    'Container No': fields['Container No'],
+                    'Seal No': fields['Seal No'],
+                    'Gross weight': fields['Gross weight'],
+                    _totalTime: `${responseTime}ms`
+                });
+                
+                return fields;
+            } catch (err) {
+                console.error(`❌ ${billType} - AI Extraction Error:`, err.message);
+                console.log(`   📋 Error details:`, err);
+                updateLoadingStatus(`⚠️ ${billType}: AI extraction lỗi, dùng fallback...`);
+                return extractFieldsFallback(text);
+            }
+        }
+
+        /**
+         * Fallback Field Extraction using Enhanced Regex
+         */
+        function extractFieldsFallback(text) {
+            const fields = {};
+            
+            // Convert to lowercase for matching but keep original for values
+            const lowerText = text.toLowerCase();
+            
+            const patterns = {
+                'Shipper': /(?:shipper|ship\s*from|người gửi)[\s:=]*\n?([\s\S]{5,100}?)(?:\n\n|\n[A-Z]|$)/i,
+                'Consignee': /(?:consignee|ship\s*to|người nhận|người mua|buyer)[\s:=]*\n?([\s\S]{5,100}?)(?:\n\n|\n[A-Z]|$)/i,
+                'Notify Party': /(?:notify\s*party|person\s*to\s*notify|thông báo cho)[\s:=]*\n?([\s\S]{5,100}?)(?:\n\n|\n[A-Z]|$)/i,
+                'Pre-carriage by': /(?:pre[\s-]?carriage\s*by|Vận chuyển trước)[\s:=]*([^\n]{5,50})/i,
+                'Place of Receipt': /(?:place\s*of\s*receipt|nơi nhận hàng)[\s:=]*([^\n]{3,30})/i,
+                'Vessel': /(?:vessel|tàu|ship\s*name|tên tàu)[\s:=]*([A-Z0-9\s]{3,50})/i,
+                'Voy. No': /(?:voy[\s.]?no|voyage[\s.]?no|số chuyến)[\s:=]*([0-9A-Z\-]{2,20})/i,
+                'Port of Loading': /(?:port\s*of\s*loading|pol|cảng gửi)[\s:=]*([A-Z0-9\s]{3,30})/i,
+                'Port of Discharge': /(?:port\s*of\s*discharge|pod|cảng đích)[\s:=]*([A-Z0-9\s]{3,30})/i,
+                'Place of Delivery': /(?:place\s*of\s*delivery|nơi giao hàng)[\s:=]*([A-Z0-9\s]{3,50})/i,
+                'Container No': /(?:container[\s.]?no|cont[\s.]?no|số cont)[\s:=]*([A-Z0-9]{11})/i,
+                'Seal No': /(?:seal[\s.]?no|số seal)[\s:=]*([A-Z0-9\-]{4,20})/i,
+                'Marks & Numbers': /(?:marks[\s&]*numbers|marks[\s&]*no|dấu hiệu)[\s:=]*([^\n]{5,100})/i,
+                'Number of containers or other Pkgs': /(?:number\s*of\s*containers|no[\s.]?\s*of\s*pkgs|số kiện|number\s+packages)[\s:=]*([0-9]{1,10})/i,
+                'Description of Packages and goods': /(?:description|mô tả|dạng hàng)[\s:=]*\n?([\s\S]{5,150}?)(?:\n[A-Z]|\n\n|$)/i,
+                'Gross weight': /(?:gross\s*weight|wt|khối lượng|cân nặng)[\s:=]*([0-9,\.]+\s*(?:kg|KG|lbs)?)/i,
+                'Measurement': /(?:measurement|cbm|m3|đo lường)[\s:=]*([0-9,\.]+\s*(?:cbm|m3)?)/i,
+                'Total number of container or packages': /(?:total\s*(?:number\s*)?(?:of\s*)?(?:container|packages|pkgs)|tổng.*kiện)[\s:=]*([0-9]{1,10})/i,
+            };
+
+            for (const [key, pattern] of Object.entries(patterns)) {
+                const match = text.match(pattern);
+                if (match) {
+                    fields[key] = match[1].trim().replace(/\n\n/g, ' ').substring(0, 100);
+                } else {
+                    fields[key] = 'N/A';
+                }
+            }
+
+            return fields;
+        }
+
+        /**
+         * Compare Fields with intelligent matching
+         */
+        function compareFields(mblFields, hblFields) {
+            const results = [];
+            const allKeys = new Set([
+                ...Object.keys(mblFields),
+                ...Object.keys(hblFields)
+            ]);
+
+            for (const key of allKeys) {
+                const mbl = mblFields[key] || 'N/A';
+                const hbl = hblFields[key] || 'N/A';
+
+                // Normalize for comparison
+                const mblNorm = mbl.toLowerCase().trim();
+                const hblNorm = hbl.toLowerCase().trim();
+
+                // Check exact match first
+                let match = mblNorm === hblNorm;
+
+                // If not exact, try contains matching for longer values
+                if (!match && mbl !== 'N/A' && hbl !== 'N/A') {
+                    const mblParts = mblNorm.split(/[\s\-_,\.]/);
+                    const hblParts = hblNorm.split(/[\s\-_,\.]/);
+
+                    // Check if key parts are contained in each other
+                    const mblKey = mblParts.slice(0, 3).join(' ');
+                    const hblKey = hblParts.slice(0, 3).join(' ');
+
+                    if (mblKey && hblKey) {
+                        match = mblNorm.includes(hblKey) || hblNorm.includes(mblKey) || 
+                                mblKey.includes(hblNorm.split(' ')[0]) || 
+                                hblKey.includes(mblNorm.split(' ')[0]);
+                    }
+                }
+
+                results.push({
+                    field: key,
+                    mbl: mbl,
+                    hbl: hbl,
+                    match: match,
+                    note: !match ? '⚠️ Không khớp' : '✓ Khớp'
+                });
+            }
+
+            return results;
+        }
+
+        /**
+         * Call AI Analysis using Anthropic API
+         */
+        async function callAiAnalysis(mblText, hblText, comparisons) {
+            if (!appState.apiKey) {
+                return '⚠️ Chưa cấu hình API Key. Vui lòng thêm API Key ở phần cấu hình để nhận phân tích từ AI.\n\nKết quả so sánh được hiển thị ở bảng trên.';
+            }
+
+            try {
+                const startTime = Date.now();
+                const mblPreview = mblText.substring(0, 1500);
+                const hblPreview = hblText.substring(0, 1500);
+
+                console.log(`\n🤖 [ANALYSIS] Gọi AI để phân tích chi tiết...`);
+                console.log(`   📊 Comparisons: ${comparisons.length} fields, ${comparisons.filter(c => c.match).length} khớp, ${comparisons.filter(c => !c.match).length} khác`);
+                console.log(`   ⏱️ Thời gian bắt đầu: ${new Date(startTime).toLocaleTimeString()}`);
+                updateLoadingStatus(`🤖 Phân tích: Gửi yêu cầu chi tiết đến AI...`);
+
+                console.log(`   📤 Gửi request tới API...`);
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${appState.apiKey}`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [{
+                                text: `Bạn là chuyên gia logistics và kiểm tra tài liệu vận chuyển. Hãy phân tích hai bill dưới đây:
+
+MASTER BILL (MBL) - Công ty Logistics:
+${mblPreview}
+...
+
+HOUSE BILL (HBL) - Người mua hàng:
+${hblPreview}
+...
+
+KẾT QUẢ SO SÁNH:
+${JSON.stringify(comparisons.map(c => ({
+                            field: c.field,
+                            mbl: c.mbl,
+                            hbl: c.hbl,
+                            match: c.match
+                        })), null, 2)}
+
+YÊUU CẦU PHÂN TÍCH:
+1. Giải thích tại sao các trường không khớp
+2. Phát hiện lỗi tinh tế (typo, dấu, format khác nhau)
+3. Đánh giá mức độ nghiêm trọng của từng sự khác biệt
+4. Đưa ra hành động cụ thể cần làm
+5. Danh sách ưu tiên xử lý (từ cao đến thấp)
+
+Trả lời ngắn gọn, dễ hiểu, bằng tiếng Việt. Dùng định dạng rõ ràng với các tiêu đề.`
+                            }]
+                        }]
+                    })
+                });
+
+                const responseTime = Date.now() - startTime;
+                console.log(`   📡 Nhận response từ API (${responseTime}ms)`);
+                updateLoadingStatus(`🤖 Phân tích: Nhận response từ API (${responseTime}ms)...`);
+
+                const data = await response.json();
+
+                if (data.error) {
+                    console.error(`   ❌ API Error:`, data.error);
+                    updateLoadingStatus(`❌ Phân tích: API Error`);
+                    const errorMsg = data.error.message || JSON.stringify(data.error);
+                    return `❌ Lỗi API: ${errorMsg}\n\nHãy kiểm tra lại API Key của bạn.`;
+                }
+
+                const analysisText = data.candidates[0].content.parts[0].text;
+                console.log(`   ✅ Analysis complete (${analysisText.length} characters)`);
+                console.log(`   📋 Analysis preview: ${analysisText.substring(0, 150)}...`);
+                console.log(`   ⏱️ Tổng thời gian: ${responseTime}ms`);
+
+                return analysisText;
+            } catch (err) {
+                console.error(`❌ [ANALYSIS] Error:`, err.message);
+                console.log(`   📋 Error details:`, err);
+                updateLoadingStatus(`❌ Phân tích: Lỗi khi gọi API`);
+                return `❌ Lỗi gọi API: ${err.message}\n\nVui lòng kiểm tra:\n- API Key có đúng không?\n- Kết nối internet có bình thường không?`;
+            }
+        }
+
+        /**
+         * Main Analysis Function
+         */
+        document.getElementById('analyze-btn').addEventListener('click', async () => {
+            if (!appState.mblFile || !appState.hblFile) {
+                showError('Vui lòng tải cả 2 file PDF');
+                return;
+            }
+
+            showLoading(true);
+            hideError();
+
+            // Clear console logs
+            console.clear();
+            console.log('🚀 START ANALYSIS - ' + new Date().toLocaleTimeString());
+            console.log('MBL Text Length:', appState.mblText.length);
+            console.log('HBL Text Length:', appState.hblText.length);
+
+            try {
+                // Extract fields using AI
+                updateLoadingStatus('📤 Trích xuất các trường từ MBL bằng AI...');
+                console.log('\n📤 Extracting MBL fields using AI...');
+                const mblFields = await extractFieldsWithAI(appState.mblText, 'MBL');
+                
+                updateLoadingStatus('📤 Trích xuất các trường từ HBL bằng AI...');
+                console.log('\n📤 Extracting HBL fields using AI...');
+                const hblFields = await extractFieldsWithAI(appState.hblText, 'HBL');
+
+                updateLoadingStatus('🔄 So sánh các trường...');
+                console.log('\n🔄 Comparing fields...');
+                const comparisons = compareFields(mblFields, hblFields);
+
+                // Calculate stats
+                const matchCount = comparisons.filter(c => c.match).length;
+                const diffCount = comparisons.filter(c => !c.match).length;
+                const accuracy = comparisons.length > 0 
+                    ? Math.round((matchCount / comparisons.length) * 100) 
+                    : 0;
+
+                console.log(`\n📊 Statistics:
+                   - Total Fields: ${comparisons.length}
+                   - Matching: ${matchCount}
+                   - Different: ${diffCount}
+                   - Accuracy: ${accuracy}%`);
+
+                // Display comparison table
+                const tbody = document.getElementById('comparison-table');
+                tbody.innerHTML = comparisons
+                    .sort((a, b) => b.match - a.match) // Matching rows first
+                    .map(c => `
+                        <tr class="${c.match ? 'match-row' : 'diff-row'}">
+                            <td class="field-name">${escapeHtml(c.field)}</td>
+                            <td><code class="field-value">${escapeHtml(c.mbl)}</code></td>
+                            <td><code class="field-value">${escapeHtml(c.hbl)}</code></td>
+                            <td style="text-align: center;"><span class="badge ${c.match ? 'badge-match' : 'badge-diff'}">${c.match ? '✓ Khớp' : '✗ Khác'}</span></td>
+                            <td><span class="note-text">${escapeHtml(c.note)}</span></td>
+                        </tr>
+                    `).join('');
+
+                // Update summary
+                document.getElementById('match-count').textContent = matchCount;
+                document.getElementById('diff-count').textContent = diffCount;
+                document.getElementById('accuracy').textContent = accuracy + '%';
+
+                // AI Analysis
+                updateLoadingStatus('🤖 Gọi AI để phân tích chi tiết...');
+                console.log('\n🤖 Calling AI for detailed analysis...');
+                document.getElementById('ai-analysis').textContent = 'Đang gọi AI để phân tích...';
+                const aiAnalysis = await callAiAnalysis(appState.mblText, appState.hblText, comparisons);
+                document.getElementById('ai-analysis').textContent = aiAnalysis;
+
+                updateLoadingStatus('✅ Phân tích hoàn tất!');
+                console.log('\n✅ ANALYSIS COMPLETE');
+                console.log('💡 Open browser DevTools (F12) to see detailed logs');
+
+                setTimeout(() => {
+                    showLoading(false);
+                    showResults(true);
+                }, 1500);
+            } catch (err) {
+                console.error('❌ Analysis Error:', err);
+                showError('Lỗi phân tích: ' + err.message);
+                showLoading(false);
+            }
+        });
+
+        /**
+         * UI Helper Functions
+         */
+        function showLoading(show) {
+            document.getElementById('loading').classList.toggle('show', show);
+            if (show) {
+                document.getElementById('loading-status').textContent = '';
+            }
+        }
+
+        function updateLoadingStatus(message) {
+            document.getElementById('loading-status').textContent = message;
+            console.log('📢 ' + message);
+        }
+
+        function showResults(show) {
+            document.getElementById('results').classList.toggle('show', show);
+        }
+
+        function showError(msg) {
+            const errorEl = document.getElementById('error');
+            document.getElementById('error-msg').textContent = msg;
+            errorEl.classList.add('show');
+        }
+
+        function hideError() {
+            document.getElementById('error').classList.remove('show');
+        }
+
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+
+        /**
+         * Initialize
+         */
+        setupDropZone('mbl-drop', 'mbl-input', 'mbl');
+        setupDropZone('hbl-drop', 'hbl-input', 'hbl');
+
+        // Allow Enter key to save API key
+        document.getElementById('api-key-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') saveApiKey();
+        });
+    </script>
+</body>
+</html>
